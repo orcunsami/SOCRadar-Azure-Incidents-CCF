@@ -60,6 +60,13 @@ MUTATIONS = {
     "company id cut from the endpoint": lambda t: swap(conn(t)["request"], "apiEndpoint", "parameters('CompanyId')", "'132'"),
     "retryCount changed": lambda t: conn(t)["request"].__setitem__("retryCount", 9),
     "timeout changed": lambda t: conn(t)["request"].__setitem__("timeoutInSeconds", 5),
+    "pages no longer throttled": lambda t: conn(t)["request"].pop("paginatedCallsPerSecond"),
+    "pages throttled at another rate": lambda t: conn(t)["request"].__setitem__("paginatedCallsPerSecond", 5),
+    "rate limit config removed": lambda t: conn(t)["request"].pop("rateLimitConfig"),
+    "rate limit not evaluated on 429": lambda t: conn(t)["request"]["rateLimitConfig"]["evaluation"].__setitem__("checkMode", "Always"),
+    "rate limit reset header renamed": lambda t: conn(t)["request"]["rateLimitConfig"]["extraction"]["headers"]["reset"].__setitem__("name", "retry-after"),
+    "rate limit reset read as integer": lambda t: conn(t)["request"]["rateLimitConfig"]["extraction"]["headers"]["reset"].__setitem__("format", "Integer"),
+    "429 retry ignores the reset header": lambda t: conn(t)["request"]["rateLimitConfig"]["retryStrategy"].__setitem__("useResetOrRetryAfterHeaders", False),
     "connector no longer waits for the DCR": lambda t: res(t, "/dataConnectors").__setitem__(
         "dependsOn", [d for d in res(t, "/dataConnectors")["dependsOn"] if "dataCollectionRules" not in d]),
     "connector writes to another stream": lambda t: conn(t)["dcrConfig"].__setitem__("streamName", "Custom-Other_CL"),
@@ -132,6 +139,8 @@ MUTATIONS = {
         "conditionProperties"].__setitem__("propertyName", "IncidentRelatedAnalyticRuleIds"),
     # parameters
     "API key becomes a plain string": lambda t: t["parameters"]["SocradarApiKey"].__setitem__("type", "string"),
+    "empty API key accepted": lambda t: t["parameters"]["SocradarApiKey"].pop("minLength"),
+    "empty company ID accepted": lambda t: t["parameters"]["CompanyId"].pop("minLength"),
     "PageSize parameter returns": lambda t: t["parameters"].__setitem__("PageSize", {"type": "int"}),
 }
 

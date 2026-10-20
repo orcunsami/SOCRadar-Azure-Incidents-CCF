@@ -86,6 +86,18 @@ if conn:
     check(req.get("queryWindowInMin") == 5, "poll window changed")
     check(req.get("rateLimitQPS") == 1 and req.get("retryCount") == 3 and req.get("timeoutInSeconds") == 60,
           "rateLimitQPS / retryCount / timeoutInSeconds changed")
+    # SOCRadar allows 5 calls/s (x-ratelimit-limit, measured 21 Oct). rateLimitQPS does not apply
+    # to pages, so paginatedCallsPerSecond must be set too.
+    check(req.get("paginatedCallsPerSecond") == 1, "pages are not throttled: paginatedCallsPerSecond != 1")
+    rl = req.get("rateLimitConfig", {})
+    hdrs = rl.get("extraction", {}).get("headers", {})
+    check(rl.get("evaluation", {}).get("checkMode") == "OnlyWhen429", "rate limit is not evaluated on 429")
+    check(rl.get("extraction", {}).get("source") == "CustomHeaders", "rate limit headers are not read")
+    check(hdrs.get("limit", {}).get("name") == "x-ratelimit-limit"
+          and hdrs.get("remaining", {}).get("name") == "x-ratelimit-remaining"
+          and hdrs.get("reset", {}).get("name") == "x-ratelimit-reset", "rate limit header names changed")
+    check(hdrs.get("reset", {}).get("format") == "UnixTimeSeconds", "x-ratelimit-reset is epoch seconds")
+    check(rl.get("retryStrategy", {}).get("useResetOrRetryAfterHeaders") is True, "429 retry ignores the reset header")
     qp = req.get("queryParameters", {})
     check(qp.get("start_date") == "{_QueryWindowStartTime}", "start_date token missing")
     check(qp.get("end_date") == "{_QueryWindowEndTime}", "end_date token missing (windows would overlap)")
@@ -228,6 +240,8 @@ for r in resources:
     if "location" in r:
         check(r["location"] == "[variables('location')]", f"{r['type']}: location is not the variable")
 check(template["parameters"]["SocradarApiKey"]["type"] == "securestring", "API key must be a securestring")
+check(template["parameters"]["SocradarApiKey"].get("minLength") == 1, "an empty API key must be refused before the deployment starts")
+check(template["parameters"]["CompanyId"].get("minLength") == 1, "an empty company ID must be refused before the deployment starts")
 check("PageSize" not in template["parameters"], "PageSize parameter came back")
 check(template["contentVersion"] == "1.0.0", "contentVersion must stay 1.0.0")
 check(not re.search(r"[A-Fa-f0-9]{32,}", raw), "long hex string in the template")

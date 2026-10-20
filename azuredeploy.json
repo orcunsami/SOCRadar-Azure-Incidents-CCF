@@ -24,12 +24,14 @@
     },
     "SocradarApiKey": {
       "type": "securestring",
+      "minLength": 1,
       "metadata": {
         "description": "SOCRadar Company API key."
       }
     },
     "CompanyId": {
       "type": "string",
+      "minLength": 1,
       "metadata": {
         "description": "SOCRadar Company ID."
       }
@@ -495,6 +497,32 @@
           "queryWindowInMin": 5,
           "queryTimeFormat": "UnixTimestamp",
           "rateLimitQPS": 1,
+          "paginatedCallsPerSecond": 1,
+          "rateLimitConfig": {
+            "evaluation": {
+              "checkMode": "OnlyWhen429"
+            },
+            "extraction": {
+              "source": "CustomHeaders",
+              "headers": {
+                "limit": {
+                  "name": "x-ratelimit-limit",
+                  "format": "Integer"
+                },
+                "remaining": {
+                  "name": "x-ratelimit-remaining",
+                  "format": "Integer"
+                },
+                "reset": {
+                  "name": "x-ratelimit-reset",
+                  "format": "UnixTimeSeconds"
+                }
+              }
+            },
+            "retryStrategy": {
+              "useResetOrRetryAfterHeaders": true
+            }
+          },
           "retryCount": 3,
           "timeoutInSeconds": 60,
           "headers": {
