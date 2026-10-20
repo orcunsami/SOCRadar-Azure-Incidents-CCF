@@ -41,9 +41,9 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
   SOCRadar writes late with an older date can be missed.
 - The poller asks for alarms by creation date. An alarm whose status changes later (resolved, false positive) is not fetched again.
   The incident stays as it was opened.
-- Not yet seen live: an alarm raised after deploy arriving through the 5-minute time window. No new alarm
-  came up during testing, so the connector the Deploy button created pulled nothing. Reading existing alarms
-  worked on a connector re-created with a fixed start date (16 alarms, 16 incidents).
+- Seen live on the connector the Deploy button created: an alarm raised after the deploy (08:07 UTC) was in the table at 08:14
+  and had an incident at 08:22, so about 7 minutes to the row and 15 minutes to the incident. This is one alarm, not a series.
+  Reading existing alarms also worked on a connector re-created with a fixed start date (16 alarms, 16 incidents).
 - Each alarm is stored with `AlarmText` cut to 4,000 characters, and the same cut text sits again inside `AlarmPayload` (checked on stored rows).
   Measured on a 329-alarm window of Executive Protection alarms: 9.8 KB per alarm after the cut (428 KB before it). Other categories were not measured.
   At that size 1,000 alarms is about 10 MB, roughly $0.08 at pay-as-you-go prices. Cost is the Log Analytics and Microsoft Sentinel ingestion only.
@@ -56,7 +56,7 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - Each rule raises at most 149 alerts per run. In a burst of more than 149 new OPEN alarms in one category within 10 minutes
   the rest never get an incident (measured: 329 alarms, 149 incidents).
 - `Other` collects every type that has no rule of its own (in company 132's history that is most of Surface Web, Botnet, Threat Hunting and Phishing), so those share one 149 limit.
-- Not seen live yet for this template: an incident from the new per-category rules, the `SOCRadar` label from the automation rule, the workbook rendering.
+- Not checked on this template: the `SOCRadar` label from the automation rule and the workbook rendering. The incident from the per-category rules was seen (see above).
 - If you ran an earlier version, delete its single rule `SOCRadar alarm` first, or alarms open two incidents.
 - If you run the `SOCRadar-Alarm-Import` Logic App, turn it off before you deploy this, or every alarm opens two incidents.
   Both write to `SOCRadar_Alarms_CL`; deploy only one of them per workspace.
