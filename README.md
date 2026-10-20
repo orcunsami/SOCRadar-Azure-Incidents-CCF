@@ -56,7 +56,7 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - Each rule raises at most 149 alerts per run. In a burst of more than 149 new OPEN alarms in one category within 10 minutes
   the rest never get an incident (measured: 329 alarms, 149 incidents).
 - `Other` collects every type that has no rule of its own (in company 132's history that is most of Surface Web, Botnet, Threat Hunting and Phishing), so those share one 149 limit.
-- Measured (20 Oct, UTC) on a connector re-created with a fixed start date and pages of 5: 23 alarms came in as 23 rows on each of three polls (69 rows, so paging worked) and as 22 incidents (the one RESOLVED alarm opened none), all labelled `SOCRadar`, no repeated title. Not checked: the workbook rendering.
+- Measured (20 Oct, UTC) on a connector re-created with a fixed start date and pages of 5: 23 alarms came in as 23 rows on each of three polls (69 rows, so paging worked) and as 22 incidents (the one RESOLVED alarm opened none), all labelled `SOCRadar`, no repeated title. The workbook rendered all five parts on those rows (status, main type, severity, per day, latest alarms), seen in the Azure Monitor view.
 - If you ran an earlier version, delete its single rule `SOCRadar alarm` first, or alarms open two incidents.
 - If you run the `SOCRadar-Alarm-Import` Logic App, turn it off before you deploy this, or every alarm opens two incidents.
   Both write to `SOCRadar_Alarms_CL`; deploy only one of them per workspace.
