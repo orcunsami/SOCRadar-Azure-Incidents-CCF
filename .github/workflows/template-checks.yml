@@ -1,0 +1,19 @@
+name: Template checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Template parses and keeps its invariants
+        run: python3 tests/test_template.py
+
+      - name: Every mutation of the template is caught
+        run: python3 tests/mutate_template.py
