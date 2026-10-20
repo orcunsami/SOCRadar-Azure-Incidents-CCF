@@ -60,8 +60,8 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - If you ran an earlier version, delete its single rule `SOCRadar alarm` first, or alarms open two incidents.
 - If you run the `SOCRadar-Alarm-Import` Logic App, turn it off before you deploy this, or every alarm opens two incidents.
   Both write to `SOCRadar_Alarms_CL`; deploy only one of them per workspace.
-- SOCRadar allows 5 calls per second per key (response headers `x-ratelimit-*`, measured). The connector sends the first call of a poll and each further page at most once per second, and on a 429 it waits for the reset header. The 429 path itself was not hit: sequential calls stayed under the limit.
-- The connection is created by the template. To stop polling, delete it (measured: the table and the rules stay, and no new row arrived in the 7 minutes after):
+- SOCRadar allows 5 calls per second and answers a 429 (`rate limit exceeded 5 per 1 second`) with `retry-after` and `x-ratelimit-*` headers (measured). The connector sends pages at most once per second and is set to wait for the reset header on a 429. Under a parallel load on the same key (29% of the load's own calls got a 429 with the setting, 26% without it), polls still brought all 23 alarms: 2 polls with the setting, 1 without. The connector's own calls were not shown to hit a 429, so the setting is a safeguard, not a measured fix.
+- The connection is created by the template. To stop polling, use the Delete button on the connector page (seen, not pressed) or the CLI (measured: the table and the rules stay, and no new row arrived in the 7 minutes after):
   `az rest --method GET --uri "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2025-06-01" --query "value[].name"`, then the same URL with `/<name>` and `--method DELETE`.
 - To rotate the API key, deploy again with the new key, `DeployNewWorkspace` set to `false`, and `WorkspaceLocation` if the workspace is not in the resource group's region.
 
