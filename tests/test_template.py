@@ -186,8 +186,25 @@ if rules:
           "rule id must come from the type and the CCF seed, not the Logic App product's")
     rp = rule["properties"]
     q = rp["query"]
-    check(rp["queryFrequency"] == "PT5M" and rp["queryPeriod"] == "PT30M", "rule schedule changed")
-    check("ingestion_time() > ago(10m)" in q, "rule lost its ingestion window")
+    check(rp["queryFrequency"] == "PT10M" and rp["queryPeriod"] == "PT1H", "rule schedule changed: expected PT10M / PT1H")
+    # A run cannot see alerts of a run less than about 6 minutes earlier (Sentinel ends the query
+    # window about 6 minutes before the run), so a shorter schedule raises every alarm twice.
+    freq = re.fullmatch(r"PT(\d+)([MH])", rp["queryFrequency"])
+    check(freq and int(freq.group(1)) * (60 if freq.group(2) == "H" else 1) >= 10,
+          "queryFrequency under 10 minutes: a run would not see the previous run's alerts")
+    check("ingestion_time() > ago(1h)" in q, "rule lost its ingestion window")
+    # A burst over 149 is spread over later runs: each run skips alarms that already have an alert.
+    alerted = ('let alerted = SecurityAlert\n| where TimeGenerated > ago(1h)\n'
+               '| where AlertName startswith "[SOCRadar] #"\n'
+               '| extend AlertAlarmId = tostring(extract(@"#(\\d+) ", 1, AlertName))\n'
+               '| distinct AlertAlarmId;')
+    check(alerted in q, "the alerted block changed: it must list the alarm ids of '[SOCRadar] #<id> ' alerts of the last hour")
+    check("| where AlarmId !in (alerted)\n| where " in q, "rule no longer skips exactly the alarms that already have an alert")
+    window = re.search(r"ingestion_time\(\) > ago\((\d+)([mh])\)", q)
+    period = re.fullmatch(r"PT(\d+)([MH])", rp["queryPeriod"])
+    to_min = lambda m: int(m.group(1)) * (60 if m.group(2).lower() == "h" else 1)
+    check(window and period and to_min(period) >= to_min(window),
+          "queryPeriod must cover the ingestion window, or older rows are cut")
     check("take 149" in q, "rule must stay under the 150 alerts a run limit")
     check("if(equals(variables('ruleTypes')[copyIndex()], 'Other'), concat('AlarmMainType !in ', variables('knownTypesKql'))" in q,
           "the Other rule must exclude every main type that has its own rule")

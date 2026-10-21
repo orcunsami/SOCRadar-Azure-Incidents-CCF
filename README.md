@@ -41,8 +41,9 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
   SOCRadar writes late with an older date can be missed.
 - The poller asks for alarms by creation date. An alarm whose status changes later (resolved, false positive) is not fetched again.
   The incident stays as it was opened.
-- Seen live on the connector the Deploy button created: an alarm raised after the deploy (08:07 UTC) was in the table at 08:14
+- Seen live (20 Oct, rules every 5 minutes) on the connector the Deploy button created: an alarm raised after the deploy (08:07 UTC) was in the table at 08:14
   and had an incident at 08:22, so about 7 minutes to the row and 15 minutes to the incident. This is one alarm, not a series.
+  With rules every 10 minutes, expect up to about 20 minutes to the incident (not measured).
   Reading existing alarms also worked on a connector re-created with a fixed start date (16 alarms, 16 incidents).
 - Each alarm is stored with `AlarmText` cut to 4,000 characters, and the same cut text sits again inside `AlarmPayload` (checked on stored rows).
   Measured on a 329-alarm window of Executive Protection alarms: 9.8 KB per alarm after the cut (428 KB before it). Other categories were not measured.
@@ -52,10 +53,13 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - Alarms from before the deploy can be loaded once: post them to the data collection endpoint with the Logs Ingestion API (an Entra identity with the Monitoring Metrics Publisher role on the rule). Measured: 22 alarms of 30 days came in as 22 rows and 21 incidents. Sending the same alarms again added rows, not incidents.
 - SOCRadar is only read. Closing an incident in Microsoft Sentinel does not change the alarm.
 - An alarm that comes back after its incident was closed, or more than 7 days later, opens a new incident.
-- A rule that is off for more than 10 minutes misses the alarms of that gap.
-- Each rule raises at most 149 alerts per run. In a burst of more than 149 new OPEN alarms in one category within 10 minutes
-  the rest never get an incident (measured: 329 alarms, 149 incidents).
-- `Other` collects every type that has no rule of its own (in company 132's history that is most of Surface Web, Botnet, Threat Hunting and Phishing), so those share one 149 limit.
+- A rule that is off for more than 1 hour misses the alarms of that gap.
+- Rules run every 10 minutes and look back 1 hour. Each run raises at most 149 alerts.
+- A rule skips alarms that already have an alert, so alarms left over get their incident in the next runs: about 894 per
+  category per hour (149 x 6 runs, a calculation). A bigger burst within an hour loses incidents.
+- Measured (21 Oct, fresh workspace): a burst of 329 OPEN alarms in one category gave 329 incidents over 3 runs (149, 149, 31), one alert per alarm, no repeated title. With the rules every 5 minutes the same burst gave 2 alerts for 327 alarms: Sentinel ends a run's query window about 6 minutes before the run, so a run did not see the alerts of the run just before it.
+- The alert name format `[SOCRadar] #<alarm id> - <title>` must not change: the rules match alerts to alarms on it.
+- `Other` collects every type that has no rule of its own (in a test company's history that is most of Surface Web, Botnet, Threat Hunting and Phishing), so those share one 149 limit.
 - Measured (20 Oct, UTC) on a connector re-created with a fixed start date and pages of 5: 23 alarms came in as 23 rows on each of three polls (69 rows, so paging worked) and as 22 incidents (the one RESOLVED alarm opened none), all labelled `SOCRadar`, no repeated title. The workbook rendered all five parts on those rows (status, main type, severity, per day, latest alarms), seen in the Azure Monitor view.
 - If you ran an earlier version, delete its single rule `SOCRadar alarm` first, or alarms open two incidents.
 - If you run the `SOCRadar-Alarm-Import` Logic App, turn it off before you deploy this, or every alarm opens two incidents.
