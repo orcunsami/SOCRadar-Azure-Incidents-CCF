@@ -51,6 +51,7 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - Use a workspace name you have not used before. Re-using the name of a workspace deleted minutes ago made
   the analytic rule fail with "Log Analytics workspace could not be found".
 - Alarms from before the deploy can be loaded once: post them to the data collection endpoint with the Logs Ingestion API (an Entra identity with the Monitoring Metrics Publisher role on the rule). Measured: 22 alarms of 30 days came in as 22 rows and 21 incidents. Sending the same alarms again added rows, not incidents.
+- The link in an incident is the SOCRadar platform link of the alarm.
 - SOCRadar is only read. Closing an incident in Microsoft Sentinel does not change the alarm.
 - An alarm that comes back after its incident was closed, or more than 7 days later, opens a new incident.
 - A rule that is off for more than 1 hour misses the alarms of that gap.

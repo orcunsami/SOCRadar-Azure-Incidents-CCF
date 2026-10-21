@@ -250,6 +250,34 @@
             {
               "name": "AlarmPayload",
               "type": "dynamic"
+            },
+            {
+              "name": "EventType",
+              "type": "string"
+            },
+            {
+              "name": "CompanyName",
+              "type": "string"
+            },
+            {
+              "name": "AlarmAsset",
+              "type": "string"
+            },
+            {
+              "name": "AlarmUrl",
+              "type": "string"
+            },
+            {
+              "name": "Tags",
+              "type": "dynamic"
+            },
+            {
+              "name": "AlarmUpdatedAt",
+              "type": "string"
+            },
+            {
+              "name": "ConnectorVersion",
+              "type": "string"
             }
           ]
         }
@@ -379,7 +407,7 @@
             "destinations": [
               "clv2ws1"
             ],
-            "transformKql": "[replace('source | extend AlarmText = substring(alarm_text, 0, 4000) | project-away alarm_text | extend TimeGenerated = now(), AlarmId = tostring(alarm_id), CompanyId = tostring(\"@@\"), AlarmMainType = tostring(alarm_type_details.alarm_main_type), AlarmSubType = tostring(alarm_type_details.alarm_sub_type), Severity = alarm_risk_level, Status = status, Title = tostring(alarm_type_details.alarm_generic_title), AlarmDate = [\"date\"], AlarmPayload = pack_all() | project TimeGenerated, AlarmId, CompanyId, AlarmMainType, AlarmSubType, Severity, Status, Title, AlarmText, AlarmDate, AlarmPayload', '@@', parameters('CompanyId'))]",
+            "transformKql": "[replace('source | extend AlarmText = substring(alarm_text, 0, 4000) | project-away alarm_text | extend TimeGenerated = now(), AlarmId = tostring(alarm_id), CompanyId = tostring(\"@@\"), AlarmMainType = tostring(alarm_type_details.alarm_main_type), AlarmSubType = tostring(alarm_type_details.alarm_sub_type), Severity = alarm_risk_level, Status = status, Title = tostring(alarm_type_details.alarm_generic_title), AlarmDate = [\"date\"], AlarmPayload = pack_all() | extend AlarmUrl = strcat(\"https://platform.socradar.com/company/\", CompanyId, \"/alarm/\", AlarmId), EventType = \"alarm.created\" | project TimeGenerated, AlarmId, CompanyId, AlarmMainType, AlarmSubType, Severity, Status, Title, AlarmText, AlarmDate, AlarmPayload, AlarmUrl, EventType', '@@', parameters('CompanyId'))]",
             "outputStream": "Custom-SOCRadar_Alarms_CL"
           }
         ]
@@ -564,7 +592,7 @@
         "description": "[concat('Raises one alert, and one incident, for every OPEN SOCRadar alarm of main type ', variables('ruleTypes')[copyIndex()], '. Switch the rule off to stop incidents for that type.')]",
         "severity": "Medium",
         "enabled": true,
-        "query": "[concat('let alerted = SecurityAlert\n| where TimeGenerated > ago(1h)\n| where AlertName startswith \"[SOCRadar] #\"\n| extend AlertAlarmId = tostring(extract(@\"#(\\d+) \", 1, AlertName))\n| distinct AlertAlarmId;\nSOCRadar_Alarms_CL\n| where ingestion_time() > ago(1h)\n| where isnotempty(AlarmId)\n| where AlarmId !in (alerted)\n| where ', if(equals(variables('ruleTypes')[copyIndex()], 'Other'), concat('AlarmMainType !in ', variables('knownTypesKql')), concat('AlarmMainType == \"', variables('ruleTypes')[copyIndex()], '\"')), '\n| summarize arg_max(TimeGenerated, *) by AlarmId\n| where toupper(Status) == \"OPEN\"\n| extend AlarmUrl = strcat(\"https://platform.socradar.com/company/\", CompanyId, \"/alarm/\", AlarmId)\n| extend SentinelSeverity = case(toupper(Severity) in (\"CRITICAL\", \"HIGH\"), \"High\", toupper(Severity) == \"MEDIUM\", \"Medium\", \"Low\")\n| extend AlarmDescription = strcat(substring(AlarmText, 0, 1500), \"\\n\\nSOCRadar severity: \", toupper(Severity))\n| project TimeGenerated, AlarmId, CompanyId, Title, AlarmDescription, AlarmMainType, AlarmSubType, Severity, Status, AlarmDate, AlarmUrl, SentinelSeverity\n| order by TimeGenerated asc\n| take 149')]",
+        "query": "[concat('let alerted = SecurityAlert\n| where TimeGenerated > ago(1h)\n| where AlertName startswith \"[SOCRadar] #\"\n| extend AlertAlarmId = tostring(extract(@\"#(\\d+) \", 1, AlertName))\n| distinct AlertAlarmId;\nSOCRadar_Alarms_CL\n| where ingestion_time() > ago(1h)\n| where isnotempty(AlarmId)\n| where column_ifexists(\"EventType\", \"\") != \"connection.test\"\n| where AlarmId !in (alerted)\n| where ', if(equals(variables('ruleTypes')[copyIndex()], 'Other'), concat('AlarmMainType !in ', variables('knownTypesKql')), concat('AlarmMainType == \"', variables('ruleTypes')[copyIndex()], '\"')), '\n| summarize arg_max(TimeGenerated, *) by AlarmId\n| where toupper(Status) == \"OPEN\"\n| extend AlarmUrl = coalesce(column_ifexists(\"AlarmUrl\", \"\"), strcat(\"https://platform.socradar.com/company/\", CompanyId, \"/alarm/\", AlarmId))\n| extend SentinelSeverity = case(toupper(Severity) in (\"CRITICAL\", \"HIGH\"), \"High\", toupper(Severity) == \"MEDIUM\", \"Medium\", \"Low\")\n| extend AlarmDescription = strcat(substring(AlarmText, 0, 1500), \"\\n\\nSOCRadar severity: \", toupper(Severity))\n| project TimeGenerated, AlarmId, CompanyId, Title, AlarmDescription, AlarmMainType, AlarmSubType, Severity, Status, AlarmDate, AlarmUrl, SentinelSeverity\n| order by TimeGenerated asc\n| take 149')]",
         "queryFrequency": "PT10M",
         "queryPeriod": "PT1H",
         "triggerOperator": "GreaterThan",

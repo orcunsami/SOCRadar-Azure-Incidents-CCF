@@ -34,6 +34,14 @@ ALLOWED_TYPES = {
 STREAM = "Custom-SOCRadar_Alarms_CL"
 # Raw SOCRadar fields the DCR transform reads. The stream has to declare every one of them.
 RAW_FIELDS = ("alarm_id", "alarm_risk_level", "status", "alarm_text", "date", "alarm_type_details")
+PROJECTED = {"TimeGenerated", "AlarmId", "CompanyId", "AlarmMainType", "AlarmSubType", "Severity", "Status", "Title",
+             "AlarmText", "AlarmDate", "AlarmPayload", "AlarmUrl", "EventType"}
+# Columns the push connector fills. The pull transform leaves all but AlarmUrl and EventType empty.
+PUSH_COLS = {"EventType": "string", "CompanyName": "string", "AlarmAsset": "string", "AlarmUrl": "string",
+             "Tags": "dynamic", "AlarmUpdatedAt": "string", "ConnectorVersion": "string"}
+TEST_ROWS = '| where isnotempty(AlarmId)\n| where column_ifexists("EventType", "") != "connection.test"\n'
+SENT_URL = ('| extend AlarmUrl = coalesce(column_ifexists("AlarmUrl", ""), '
+            'strcat("https://platform.socradar.com/company/", CompanyId, "/alarm/", AlarmId))\n')
 
 failures = []
 
@@ -139,12 +147,17 @@ if dcr and table:
     for col in RAW_FIELDS:
         check(col in declared, f"stream does not declare {col}")
         check(col in kql, f"transformKql does not read {col}")
-    table_cols = {c["name"] for c in table["properties"]["schema"]["columns"]}
+    table_cols = {c["name"]: c["type"] for c in table["properties"]["schema"]["columns"]}
     projected = re.search(r"\| project ([^|']+)'", kql)
     projected_cols = {c.strip() for c in projected.group(1).split(",")} if projected else set()
-    check(projected_cols == table_cols,
-          f"transform output and table columns differ: only in transform {sorted(projected_cols - table_cols)}, "
-          f"only in table {sorted(table_cols - projected_cols)}")
+    check(projected_cols == PROJECTED, f"transform output changed: missing {sorted(PROJECTED - projected_cols)}, "
+          f"extra {sorted(projected_cols - PROJECTED)}")
+    check(projected_cols <= set(table_cols), f"transform writes columns the table lacks: {sorted(projected_cols - set(table_cols))}")
+    # The push connector writes these too; same table, so both templates must declare them.
+    for col, kind in PUSH_COLS.items():
+        check(table_cols.get(col) == kind, f"table column {col} ({kind}) missing")
+    check('| extend AlarmUrl = strcat("https://platform.socradar.com/company/", CompanyId, "/alarm/", AlarmId), '
+          'EventType = "alarm.created" | project' in kql, "transform no longer sets AlarmUrl and EventType")
     check(table["properties"]["schema"]["name"] == "[variables('tableName')]", "table schema name is not the table variable")
     check(depends(dcr, "dataCollectionEndpoints") and depends(dcr, "tables"), "DCR must depend on the DCE and the table")
     check("dataCollectionEndpoints" in dp.get("dataCollectionEndpointId", ""), "DCR is not bound to the DCE")
@@ -206,6 +219,8 @@ if rules:
     check(window and period and to_min(period) >= to_min(window),
           "queryPeriod must cover the ingestion window, or older rows are cut")
     check("take 149" in q, "rule must stay under the 150 alerts a run limit")
+    check(TEST_ROWS in q, "rule no longer skips SOCRadar's connection.test rows")
+    check(SENT_URL in q, "rule must use the AlarmUrl SOCRadar sends and build the platform link only when none is sent")
     check("if(equals(variables('ruleTypes')[copyIndex()], 'Other'), concat('AlarmMainType !in ', variables('knownTypesKql'))" in q,
           "the Other rule must exclude every main type that has its own rule")
     check("concat('AlarmMainType == \"', variables('ruleTypes')[copyIndex()]" in q, "a typed rule must filter on its own main type")

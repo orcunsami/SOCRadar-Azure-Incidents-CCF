@@ -124,6 +124,10 @@ MUTATIONS = {
     "rule carries AlarmText into the alert": lambda t: swap(rule(t), "query", "| project TimeGenerated, AlarmId, CompanyId, Title, AlarmDescription,",
                                                             "| project TimeGenerated, AlarmId, CompanyId, Title, AlarmText, AlarmDescription,"),
     "rule display name loses the type": lambda t: rule(t).__setitem__("displayName", "SOCRadar alarm"),
+    "rule drops the connection.test filter": lambda t: swap(rule(t), "query", '| where column_ifexists("EventType", "") != "connection.test"\n', ""),
+    "rule ignores the AlarmUrl SOCRadar sends": lambda t: swap(rule(t), "query", 'coalesce(column_ifexists("AlarmUrl", ""), strcat(', "(strcat("),
+    "table loses a push column": lambda t: res(t, "/tables")["properties"]["schema"]["columns"].pop(),
+    "transform no longer sets EventType": lambda t: swap(dcr(t)["dataFlows"][0], "transformKql", ', EventType = "alarm.created"', ""),
     # transform
     "AlarmText no longer cut": lambda t: swap(dcr(t)["dataFlows"][0], "transformKql", "AlarmText = substring(alarm_text, 0, 4000)", "AlarmText = alarm_text"),
     "alarm_text kept in the payload": lambda t: swap(dcr(t)["dataFlows"][0], "transformKql", " | project-away alarm_text", ""),
@@ -152,6 +156,11 @@ MUTATIONS = {
     "PageSize parameter returns": lambda t: t["parameters"].__setitem__("PageSize", {"type": "int"}),
 }
 
+# Optional arguments: run only the mutations whose name contains one of them, and show the failure.
+ONLY = sys.argv[1:]
+if ONLY:
+    MUTATIONS = {n: f for n, f in MUTATIONS.items() if any(o in n for o in ONLY)}
+
 survivors = []
 with tempfile.TemporaryDirectory() as tmp:
     target = os.path.join(tmp, "azuredeploy.json")
@@ -164,6 +173,8 @@ with tempfile.TemporaryDirectory() as tmp:
                              env={**os.environ, "TEMPLATE_PATH": target})
         caught = run.returncode != 0 and "TEMPLATE CHECK FAILED" in run.stdout
         print(f"  {'caught  ' if caught else 'SURVIVED'}  {name}")
+        if ONLY:
+            print("".join(f"      {line}\n" for line in run.stdout.splitlines() if line.startswith("  - ")), end="")
         if not caught:
             survivors.append(name)
 
