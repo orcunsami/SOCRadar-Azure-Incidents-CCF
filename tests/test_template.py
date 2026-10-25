@@ -41,7 +41,23 @@ PUSH_COLS = {"EventType": "string", "CompanyName": "string", "AlarmAsset": "stri
              "Tags": "dynamic", "AlarmUpdatedAt": "string", "ConnectorVersion": "string"}
 TEST_ROWS = '| where isnotempty(AlarmId)\n| where column_ifexists("EventType", "") != "connection.test"\n'
 SENT_URL = ('| extend AlarmUrl = coalesce(column_ifexists("AlarmUrl", ""), '
-            'strcat("https://platform.socradar.com/company/", CompanyId, "/alarm/", AlarmId))\n')
+            'strcat("https://platform.socradar.com/app/company/", CompanyId, "/alarm-management?tab=", '
+            'iff(tostring(AlarmPayload.is_approved) == "false", "potential", "approved"), '
+            '"&field=alarmId&operator=equals&value=", AlarmId))\n')
+# The alert description is the incident description. It is built like the Logic App product's:
+# header lines, escaped details, a Field | Value table of the alarm content, then the link.
+# Microsoft documents 5 KB for an overridden alert description and the incident takes at most 5000
+# characters, so the description is cut by UTF-8 bytes, link kept last.
+DESCRIPTION = (
+    "| mv-apply ContentKey = bag_keys(AlarmContent) to typeof(string) on (",
+    'strcat("Content:\\n\\n| Field | Value |\\n|---|---|\\n", strcat_array(ContentRows, "\\n")), 0, 2600)',
+    'SafeValue = replace_string(replace_string(replace_string(RawValue, "<", "&lt;"), ">", "&gt;"), "|", "\\\\|")',
+    "iff(BodyBytes > BodyBudget, strcat(substring(DescriptionBody, 0, toint(strlen(DescriptionBody) * 1.0 * BodyBudget / BodyBytes) - 10)",
+    "DescriptionBody), DescriptionLink)",
+    "| extend DescriptionLink = strcat(\"View in SOCRadar: \", AlarmUrl)",
+    "BodyBytes = strlen(base64_encode_tostring(DescriptionBody)) * 3 / 4, BodyBudget = 4800 - 2 * strlen(DescriptionLink)",
+    "strlen(base64_encode_tostring(AlarmDescription)) * 3 / 4 > 4900",
+)
 
 failures = []
 
@@ -221,6 +237,16 @@ if rules:
     check("take 149" in q, "rule must stay under the 150 alerts a run limit")
     check(TEST_ROWS in q, "rule no longer skips SOCRadar's connection.test rows")
     check(SENT_URL in q, "rule must use the AlarmUrl SOCRadar sends and build the platform link only when none is sent")
+    for part in DESCRIPTION:
+        check(part in q, f"alert description lost a part: {part}")
+    desc = q[q.find("| extend AlarmContent"):q.find("| project TimeGenerated")]
+    # The Defender portal shows the alert description as plain text and rewrites <br> and backticks to
+    # underscores, so neither may reach the description.
+    check("<br>" not in desc, "description uses <br>: the Defender portal shows it as _br_")
+    check('"`", "\'\'"' in desc and desc.count('"`", "\'\'"') == 2, "backticks in content and details must become quotes")
+    check(desc.find('"<", "&lt;"') < desc.find("BodyBytes"), "escape before cutting: escaping after the cut can pass 5 KB")
+    check(desc.rstrip().endswith("AlarmDescription)") and "DescriptionLink), AlarmDescription)" in desc,
+          "the link must stay the last line of the description even when the body is cut")
     check("if(equals(variables('ruleTypes')[copyIndex()], 'Other'), concat('AlarmMainType !in ', variables('knownTypesKql'))" in q,
           "the Other rule must exclude every main type that has its own rule")
     check("concat('AlarmMainType == \"', variables('ruleTypes')[copyIndex()]" in q, "a typed rule must filter on its own main type")

@@ -37,6 +37,8 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 
 ## Things to know
 
+- The incident description lists the alarm ID, types, severity, status, date and text, then the alarm content as a
+  Field | Value table. The Azure portal shows the table; the Defender portal shows the same text without formatting.
 - Alarms flow in from the moment you deploy. Alarms raised before that are not imported, and an alarm
   SOCRadar writes late with an older date can be missed.
 - The poller asks for alarms by creation date. An alarm whose status changes later (resolved, false positive) is not fetched again.
