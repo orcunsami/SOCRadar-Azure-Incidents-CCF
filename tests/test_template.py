@@ -93,6 +93,13 @@ for r in resources:
 for banned in ("Microsoft.Logic", "Microsoft.Web", "Microsoft.Storage"):
     check(not any(t.startswith(banned) for t in by_type),
           f"{banned} resource found: something would run or be billed per poll")
+# The one nested deployment is the workspace precheck, and it deploys nothing: it only reads.
+nested = by_type.get("Microsoft.Resources/deployments", [])
+check(len(nested) == 1 and nested[0].get("name") == "precheck-workspace-exists",
+      "the only nested deployment allowed is precheck-workspace-exists, found %s" % [r.get("name") for r in nested])
+for r in nested:
+    check(r["properties"]["template"].get("resources") == [],
+          "%s: the precheck's inner template must declare no resources (it would run or be billed)" % r.get("name"))
 
 # ---- the poller ----
 conn = one(by_type, P + "/providers/dataConnectors")

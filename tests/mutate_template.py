@@ -178,6 +178,17 @@ MUTATIONS = {
     "table no longer waits for the guard": lambda t: res(t, "/tables").__setitem__("dependsOn", [
         d for d in res(t, "/tables")["dependsOn"] if "precheck" not in d]),
     "endpoint no longer waits for the guard": lambda t: res(t, "dataCollectionEndpoints").pop("dependsOn"),
+    "workspace guard runs only when the workspace is being created": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists").__setitem__(
+        "condition", "[parameters('DeployNewWorkspace')]"),
+    "workspace guard reference loses its api-version": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")["properties"]["template"]["outputs"][
+        "sentinelOnboarded"].__setitem__("value", "[reference(extensionResourceId(parameters('WorkspaceResourceId'), 'Microsoft.SecurityInsights/onboardingStates', 'default'), '1999-01-01', 'Full').id]"),
+    "a second nested deployment appears": lambda t: t["resources"].append(
+        {**copy.deepcopy(next(r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")), "name": "extra"}),
+    "the precheck deploys a resource": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")["properties"]["template"].__setitem__(
+        "resources", [{"type": "Microsoft.Logic/workflows", "apiVersion": "2019-05-01", "name": "x", "location": "x", "properties": {}}]),
     "DeployNewWorkspace defaults to true again": lambda t: t["parameters"]["DeployNewWorkspace"].__setitem__("defaultValue", True),
     "PageSize parameter returns": lambda t: t["parameters"].__setitem__("PageSize", {"type": "int"}),
 }

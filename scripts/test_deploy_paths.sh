@@ -33,6 +33,7 @@ if [ -z "${TEST_SOCRADAR_API_KEY:-}" ] || [ -z "${TEST_COMPANY_ID:-}" ]; then
     echo "ERROR: set TEST_SOCRADAR_API_KEY and TEST_COMPANY_ID (a live key for that company)"; exit 1
 fi
 KEY_FILE=""; DEAD_FILE=""
+trap 'rm -f "$KEY_FILE" "$DEAD_FILE"' EXIT   # replaced by cleanup() below; covers an early exit
 mkparams() {  # mkparams <key> -> path of a 0600 ARM parameter file
     local f; f=$(mktemp); chmod 600 "$f"
     KEY="$1" CID="$TEST_COMPANY_ID" python3 -c "import json,os;print(json.dumps({'\$schema':'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#','contentVersion':'1.0.0.0','parameters':{'SocradarApiKey':{'value':os.environ['KEY']},'CompanyId':{'value':os.environ['CID']}}}))" > "$f"

@@ -26,8 +26,6 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.environ.get("TEMPLATE_PATH") or os.path.join(os.path.dirname(HERE), "azuredeploy.json")
 GUARD = "precheck-workspace-exists"
-GUARD2 = "precheck-external-workspace"
-CROSS_RG = False
 WS_TYPE = "Microsoft.OperationalInsights/workspaces"
 
 failures = []
@@ -60,7 +58,7 @@ check(toggle.get("defaultValue") is False,
 check(list(params)[:2] == ["WorkspaceName", "DeployNewWorkspace"],
       "azuredeploy.json: DeployNewWorkspace must be declared directly after WorkspaceName, found %s" % list(params)[:2])
 
-names = [GUARD] + ([GUARD2] if CROSS_RG else [])
+names = [GUARD]
 
 for name in names:
     found = [r for r in resources if r.get("name") == name]
@@ -94,21 +92,16 @@ if any(r.get("name") == GUARD for r in resources):
     check("onboardingStates" in json.dumps(outs.get("sentinelOnboarded", {}))
           and "reference(" in json.dumps(outs.get("sentinelOnboarded", {})),
           "%s: does not assert that Microsoft Sentinel is enabled on the workspace" % GUARD)
-    check("DeployNewWorkspace" in json.dumps(guard.get("condition")) or
-          "deployWorkspace" in json.dumps(guard.get("condition")),
-          "%s: not gated on the create toggle - it would look for a workspace this "
-          "deployment is about to create" % GUARD)
+    # Exact text, not "mentions the toggle": a condition without the `not` runs the guard on a
+    # workspace being created (it fails a greenfield install) and skips it on an existing one.
+    check(guard.get("condition") == "[not(parameters('DeployNewWorkspace'))]",
+          "%s: condition must be exactly [not(parameters('DeployNewWorkspace'))], found %r"
+          % (GUARD, guard.get("condition")))
+    check("'2023-09-01', 'Full'" in json.dumps(outs.get("workspaceId", {}))
+          and "'2023-02-01', 'Full'" in json.dumps(outs.get("sentinelOnboarded", {})),
+          "%s: the references must carry a real api-version and 'Full', or ARM cannot resolve them" % GUARD)
     check("workspaceResourceId" in json.dumps(guard.get("properties", {})),
           "%s: does not resolve the workspace resource id" % GUARD)
-
-if CROSS_RG and any(r.get("name") == GUARD2 for r in resources):
-    guard2 = [r for r in resources if r.get("name") == GUARD2][0]
-    check("isExternalWorkspace" in json.dumps(guard2.get("condition")),
-          "%s: not gated on the workspace being external - it would demand onboarding in "
-          "the same-RG case, where this template does the onboarding itself" % GUARD2)
-    check("onboardingStates" in json.dumps(guard2.get("properties", {})),
-          "%s: does not check Microsoft Sentinel onboarding, so a cross-RG deployment onto "
-          "a workspace without Microsoft Sentinel still succeeds" % GUARD2)
 
 # Nothing may run before the guards. A resource missing from this list is one that gets
 # created before the deployment fails, which is the whole defect.
