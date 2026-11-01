@@ -21,7 +21,7 @@ Analytics.
 | `WorkspaceName` | Microsoft Sentinel workspace name (not the GUID) |
 | `SocradarApiKey` | Your SOCRadar API key. A wrong key fails the deployment (401 on the connection check). Measured at deploy time only; a key revoked later, or a wrong company ID, was not tested |
 | `CompanyId` | Your SOCRadar company ID |
-| `DeployNewWorkspace` | `true` creates the workspace and enables Microsoft Sentinel on it. `false` uses an existing workspace that already has Microsoft Sentinel, in the same resource group. Default `true` |
+| `DeployNewWorkspace` | Default `false`: the workspace in `WorkspaceName` must already exist in this resource group and have Microsoft Sentinel, and a misspelled name fails before anything is created. `true` creates the workspace and enables Microsoft Sentinel on it |
 | `WorkspaceLocation` | Region of the workspace. Defaults to the resource group region. Set it when the workspace is in another region |
 | `TableRetentionDays` | Retention of `SOCRadar_Alarms_CL`. Default 90 |
 
@@ -50,7 +50,7 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - Each alarm is stored with `AlarmText` cut to 4,000 characters, and the same cut text sits again inside `AlarmPayload` (checked on stored rows).
   Measured on a 329-alarm window of Executive Protection alarms: 9.8 KB per alarm after the cut (428 KB before it). Other categories were not measured.
   At that size 1,000 alarms is about 10 MB, roughly $0.08 at pay-as-you-go prices. Cost is the Log Analytics and Microsoft Sentinel ingestion only.
-- Use a workspace name you have not used before. Re-using the name of a workspace deleted minutes ago made
+- With `DeployNewWorkspace` set to `true`, use a workspace name you have not used before. Re-using the name of a workspace deleted minutes ago made
   the analytic rule fail with "Log Analytics workspace could not be found".
 - Alarms from before the deploy can be loaded once: post them to the data collection endpoint with the Logs Ingestion API (an Entra identity with the Monitoring Metrics Publisher role on the rule). Measured: 22 alarms of 30 days came in as 22 rows and 21 incidents. Sending the same alarms again added rows, not incidents.
 - The link in an incident is the SOCRadar platform link of the alarm.
@@ -70,7 +70,7 @@ The first rows of a new table can take 6-15 minutes to show up. The connector pa
 - SOCRadar allows 5 calls per second and answers a 429 (`rate limit exceeded 5 per 1 second`) with `retry-after` and `x-ratelimit-*` headers (measured). The connector sends pages at most once per second and is set to wait for the reset header on a 429. Under a parallel load on the same key (29% of the load's own calls got a 429 with the setting, 26% without it), polls still brought all 23 alarms: 2 polls with the setting, 1 without. The connector's own calls were not shown to hit a 429, so the setting is a safeguard, not a measured fix.
 - The connection is created by the template. To stop polling, use the Delete button on the connector page (seen, not pressed) or the CLI (measured: the table and the rules stay, and no new row arrived in the 7 minutes after):
   `az rest --method GET --uri "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2025-06-01" --query "value[].name"`, then the same URL with `/<name>` and `--method DELETE`.
-- To rotate the API key, deploy again with the new key, `DeployNewWorkspace` set to `false`, and `WorkspaceLocation` if the workspace is not in the resource group's region.
+- To rotate the API key, deploy again with the new key, `DeployNewWorkspace` left at `false`, and `WorkspaceLocation` if the workspace is not in the resource group's region.
 
 ## Push
 
@@ -80,5 +80,8 @@ A push connector, where SOCRadar sends the alarms, is in development and not ava
 
 ```
 python3 tests/test_template.py
+python3 tests/test_workspace_precheck.py
 python3 tests/mutate_template.py
 ```
+
+`scripts/test_deploy_paths.sh` deploys into live Azure: a missing workspace, a workspace without Microsoft Sentinel, a new one, a redeploy and a rejected key. It needs `TEST_SUBSCRIPTION_ID`, `TEST_SOCRADAR_API_KEY` and `TEST_COMPANY_ID`.

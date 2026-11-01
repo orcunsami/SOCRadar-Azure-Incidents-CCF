@@ -16,7 +16,7 @@ import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(REPO, "azuredeploy.json")
-TEST = os.path.join(REPO, "tests", "test_template.py")
+TESTS = [os.path.join(REPO, "tests", n) for n in ("test_template.py", "test_workspace_precheck.py")]
 P = "Microsoft.OperationalInsights/workspaces"
 
 with open(PATH, encoding="utf-8") as fh:
@@ -165,6 +165,20 @@ MUTATIONS = {
     "API key becomes a plain string": lambda t: t["parameters"]["SocradarApiKey"].__setitem__("type", "string"),
     "empty API key accepted": lambda t: t["parameters"]["SocradarApiKey"].pop("minLength"),
     "empty company ID accepted": lambda t: t["parameters"]["CompanyId"].pop("minLength"),
+    # the workspace guard
+    "workspace guard removed": lambda t: t["resources"].remove(next(r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")),
+    "workspace guard no longer looks at the workspace": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")["properties"]["template"]["outputs"].__setitem__(
+        "workspaceId", {"type": "string", "value": "ok"}),
+    "workspace guard no longer asserts Sentinel": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")["properties"]["template"]["outputs"].pop("sentinelOnboarded"),
+    "workspace guard evaluated in the outer scope": lambda t: next(
+        r for r in t["resources"] if r.get("name") == "precheck-workspace-exists")["properties"].__setitem__(
+        "expressionEvaluationOptions", {"scope": "outer"}),
+    "table no longer waits for the guard": lambda t: res(t, "/tables").__setitem__("dependsOn", [
+        d for d in res(t, "/tables")["dependsOn"] if "precheck" not in d]),
+    "endpoint no longer waits for the guard": lambda t: res(t, "dataCollectionEndpoints").pop("dependsOn"),
+    "DeployNewWorkspace defaults to true again": lambda t: t["parameters"]["DeployNewWorkspace"].__setitem__("defaultValue", True),
     "PageSize parameter returns": lambda t: t["parameters"].__setitem__("PageSize", {"type": "int"}),
 }
 
@@ -181,9 +195,12 @@ with tempfile.TemporaryDirectory() as tmp:
         fn(mutated)
         with open(target, "w", encoding="utf-8") as fh:
             json.dump(mutated, fh, indent=2)
-        run = subprocess.run([sys.executable, "-I", TEST], capture_output=True, text=True,
-                             env={**os.environ, "TEMPLATE_PATH": target})
-        caught = run.returncode != 0 and "TEMPLATE CHECK FAILED" in run.stdout
+        runs = [subprocess.run([sys.executable, "-I", test], capture_output=True, text=True,
+                               env={**os.environ, "TEMPLATE_PATH": target}) for test in TESTS]
+        # A crash is not a catch: a test has to say which check failed.
+        caught = any(r.returncode != 0 and ("TEMPLATE CHECK FAILED" in r.stdout or "problem(s) in" in r.stdout)
+                     for r in runs)
+        run = type("R", (), {"stdout": "".join(r.stdout for r in runs)})
         print(f"  {'caught  ' if caught else 'SURVIVED'}  {name}")
         if ONLY:
             print("".join(f"      {line}\n" for line in run.stdout.splitlines() if line.startswith("  - ")), end="")

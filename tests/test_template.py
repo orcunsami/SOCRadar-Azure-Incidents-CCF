@@ -30,6 +30,7 @@ ALLOWED_TYPES = {
     P + "/providers/alertRules",
     P + "/providers/automationRules",
     "Microsoft.Insights/workbooks",
+    "Microsoft.Resources/deployments",  # precheck-workspace-exists: stops a misspelled workspace before anything is created
 }
 STREAM = "Custom-SOCRadar_Alarms_CL"
 # Raw SOCRadar fields the DCR transform reads. The stream has to declare every one of them.
@@ -273,7 +274,7 @@ if auto:
     check(cond.get("propertyName") == "IncidentTitle" and cond.get("operator") == "StartsWith"
           and cond.get("propertyValues") == ["[[SOCRadar]"],
           "automation rule must label by the [SOCRadar] title prefix")
-    check(auto["dependsOn"] == ["socradarAlarmRules"], "automation rule must wait for the whole rule loop")
+    check("socradarAlarmRules" in auto["dependsOn"], "automation rule must wait for the whole rule loop")
     check(auto["properties"]["actions"][0]["actionConfiguration"]["labels"] == [{"labelName": "SOCRadar"}],
           "incident label changed")
 
