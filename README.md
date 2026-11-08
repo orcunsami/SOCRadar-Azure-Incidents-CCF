@@ -43,7 +43,7 @@ Microsoft Sentinel in the Azure portal is supported until 31 March 2027; after t
 |---|---|
 | Incidents raised by the scheduled analytics rules | Investigation & response > Incidents & alerts > Incidents |
 | Alarm data in KQL | Investigation & response > Hunting > Advanced hunting: `SOCRadar_Alarms_CL`; select the workspace at the top right, including a secondary workspace |
-| Dashboard | Microsoft Sentinel > Threat management > Workbooks. The Workbooks page shows data from the primary workspace only. |
+| Dashboard | Microsoft Sentinel > Threat management > Workbooks. The Workbooks page in the Defender portal shows data from the primary workspace only; if this workspace is secondary, query the tables with Advanced hunting instead. |
 | Data connector | Microsoft Sentinel > Configuration > Data connectors: SOCRadar Alarms |
 
 ## Things to know
