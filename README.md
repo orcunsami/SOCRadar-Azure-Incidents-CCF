@@ -35,6 +35,17 @@ SOCRadar_Alarms_CL | take 1
 
 The first rows of a new table can take 6-15 minutes to show up. The connector page shows `Connected` for up to 30 days after the last data, so the table is the proof, not the page.
 
+## Where to see it in the Microsoft Defender portal
+
+Microsoft Sentinel in the Azure portal is supported until 31 March 2027; after that it is available only in the Microsoft Defender portal.
+
+| What | Defender portal |
+|---|---|
+| Incidents raised by the scheduled analytics rules | Investigation & response > Incidents & alerts > Incidents |
+| Alarm data in KQL | Investigation & response > Hunting > Advanced hunting: `SOCRadar_Alarms_CL`; select the workspace at the top right, including a secondary workspace |
+| Dashboard | Microsoft Sentinel > Threat management > Workbooks. The Workbooks page shows data from the primary workspace only. |
+| Data connector | Microsoft Sentinel > Configuration > Data connectors: SOCRadar Alarms |
+
 ## Things to know
 
 - The incident description lists the alarm ID, types, severity, status, date and text, then the alarm content as a
